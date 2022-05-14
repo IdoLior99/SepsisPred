@@ -103,45 +103,44 @@ def train_and_eval(clf, train_dataloader, train_dataset, test_dataloader, test_d
     print("...Training Done...")
 
 
-# def eval_cnn(cnn, test_dataloader, criterion):
-#     """
-#     Test a cnn on the test dataset
-#     """
-#     cnn.eval()
-#     test_scores = []
-#     test_labels = []
-#     for test_images, t_labels in test_dataloader:
-#         with torch.no_grad():
-#             if torch.cuda.is_available():
-#                 print("cuda??")
-#                 test_images = test_images.cuda()
-#                 t_labels = t_labels.cuda()
-#             test_outputs = cnn(test_images)
-#         test_scores.extend(test_outputs.tolist())
-#         test_labels.extend([t_label.item() for t_label in t_labels])
-#     test_preds = torch.argmax(torch.tensor(test_scores), 1)
-#     test_loss = criterion(torch.tensor(test_scores), torch.tensor(test_labels)).data
-#     test_f1 = f1_score(test_labels, test_preds)
-#     test_correct = sum([1 if epoch_pred == epoch_label else 0 for epoch_pred, epoch_label in
-#                         zip(test_preds, test_labels)])
-#     test_acc = float(test_correct) / len(test_labels)
-#     cnn.train()
-#     return test_f1, test_loss, test_acc
+def eval_cnn(clf, test_dataloader, criterion):
+    """
+    Test a cnn on the test dataset
+    """
+    clf.eval()
+    test_scores = []
+    test_labels = []
+    for test_images, t_labels in test_dataloader:
+        with torch.no_grad():
+            if torch.cuda.is_available():
+                print("cuda??")
+                test_images = test_images.cuda()
+                t_labels = t_labels.cuda()
+            test_outputs = clf(test_images)
+        test_scores.extend(test_outputs.tolist())
+        test_labels.extend([t_label.item() for t_label in t_labels])
+    test_preds = torch.argmax(torch.tensor(test_scores), 1)
+    test_loss = criterion(torch.tensor(test_scores), torch.tensor(test_labels)).data
+    test_f1 = f1_score(test_labels, test_preds)
+    test_correct = sum([1 if epoch_pred == epoch_label else 0 for epoch_pred, epoch_label in
+                        zip(test_preds, test_labels)])
+    test_acc = float(test_correct) / len(test_labels)
+    clf.train()
+    return test_f1, test_loss, test_acc
 
 
-# def run_eval_cnn(num_epochs, batch_size, learning_rate, transform, network_params, train_set, model_name,
-#                  test_e_check=False, save=False, train_loader=None, test_loader=None):
-#
-#     cnn = MLP(in_dim=network_params["in_channel"], channels=network_params["channels"],
-#               mlp_hidden_dims=network_params["mlp_hidden_dims"], output_dim=network_params["output_dim"],
-#               pool_type=network_params["pool_type"], pool_every=network_params["pool_every"],
-#               activation_type=network_params["activation_type"],
-#               final_activation_type=network_params["final_activation_type"],
-#               dropout=network_params["dropout"])
-#     if test_loader and train_loader:
-#         train_and_eval(cnn, train_loader, train_set, test_loader, None, num_epochs,
-#                        batch_size, learning_rate, test_epoch_check=True, save=True, model_name=model_name)
-#     else:
-#         subtrain_loader, subtrain_set, subtest_loader, subtest_set = train_test_split(train_set, batch_size, transform)
-#         train_and_eval(cnn, subtrain_loader, subtrain_set, subtest_loader, subtest_set, num_epochs,
-#                        batch_size, learning_rate, test_epoch_check=test_e_check, save=save, model_name=model_name)
+def run_eval_classifier(num_epochs, batch_size, learning_rate, network_params, train_set, model_name,
+                        test_e_check=False, save=False, train_loader=None, test_loader=None):
+
+    cnn = MLP(in_dim=network_params["in_dim"],
+              mlp_hidden_dims=network_params["mlp_hidden_dims"], output_dim=network_params["output_dim"],
+              activation_type=network_params["activation_type"],
+              final_activation_type=network_params["final_activation_type"],
+              dropout=network_params["dropout"])
+    if test_loader and train_loader:
+        train_and_eval(cnn, train_loader, train_set, test_loader, None, num_epochs,
+                       batch_size, learning_rate, test_epoch_check=True, save=True, model_name=model_name)
+    else:
+        subtrain_loader, subtrain_set, subtest_loader, subtest_set = train_test_split(train_set, batch_size)
+        train_and_eval(cnn, subtrain_loader, subtrain_set, subtest_loader, subtest_set, num_epochs,
+                       batch_size, learning_rate, test_epoch_check=test_e_check, save=save, model_name=model_name)
