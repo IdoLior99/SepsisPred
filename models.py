@@ -20,9 +20,6 @@ class MLP(nn.Module):
         final_activation = ACTIVATIONS[final_activation_type]
         mlp_layers = []
         self.structure += "--------- MLP --------- \n"
-        if dropout:
-            mlp_layers.append(nn.Dropout(dropout))
-            self.structure += f"Dropout({dropout}) \n"
         if (len(mlp_hidden_dims)) > 0:
             mlp_layers.extend([nn.Linear(in_dim, mlp_hidden_dims[0]), activation])
             self.structure += f"Linear({in_dim},{mlp_hidden_dims[0]}), {activation_type} \n"

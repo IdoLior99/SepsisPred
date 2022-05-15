@@ -39,7 +39,7 @@ def impute(meta_df: pd.DataFrame):
     return meta_df
 
 
-def get_ds_adv(ds_path, cols, topickle=True):
+def get_ds_adv(ds_path, cols, topickle=True, name=''):
     """
     Reads the meta-dataset, severs any positive rows besides the first positive one and assigns label appropriately.
     """
@@ -57,19 +57,21 @@ def get_ds_adv(ds_path, cols, topickle=True):
                 table['Patient'] = [i] * len(table.index)
                 mega_table = mega_table.append(table, ignore_index=True)
 
-        pickle.dump(mega_table, open('mega_table.p','wb'))
+        pickle.dump(mega_table, open(f'mega_table_{name}.p', 'wb'))
     else:
         print("Loading previously configured mega-table")
-        pickle.load(open('mega_table.p', 'rb'))
+        mega_table = pickle.load(open(f'mega_table_{name}.p', 'rb'))
     mega_table = impute(mega_table)  # imputation
-    mega_table = mega_table[['Patient']+cols]  # feature selection
-    for idx, table in mega_table.groupby(['Patient']):
+    if len(cols) > 1:
+        mega_table = mega_table[['Patient']+cols+['SepsisLabel']]  # feature selection
+    for idx, table in tqdm.tqdm(mega_table.groupby(['Patient'])):
+        table = table.reset_index()
         sepsis = table['SepsisLabel'].array
-        itemindex = np.where(sepsis == 1)[0]
+        itemindex = list(np.where(sepsis == 1)[0])
         if len(itemindex) >= 1:
             table.drop(itemindex[1:], inplace=True)
         label = table['SepsisLabel'].sum()
-        features = table.drop(['Patient','SepsisLabel'], axis=1)
+        features = table.drop(['Patient', 'SepsisLabel', 'index'], axis=1)
         data.append([features, label])
     return data
 
@@ -91,6 +93,18 @@ def get_ds(ds_path):
     return data
 
 
+def w_mean(cdf):
+  df = cdf.copy()
+  num_rows = len(df.index)
+  sum = 0
+  for i, row in enumerate(df.index):
+    print (1/(num_rows-i))
+    df.iloc[i:i+1, :] = (1/(num_rows-i)) * df.iloc[i:i+1, :]
+    sum += (1/(num_rows-i))
+  df = df.apply(lambda x: round(x/sum, 3))
+  return df
+
+
 def clean_table(df: pd.DataFrame, tensorize=True):
     """
     A basic preprocessing scheme
@@ -101,12 +115,6 @@ def clean_table(df: pd.DataFrame, tensorize=True):
     if tensorize:
         mea = torch.tensor(mea).float()
     return mea
-
-
-# def under_sampler(squashed):
-#     features = [l[0] for l in squashed]
-#     labels = [l[1] for l in squashed]
-#     return RandomUnderSampler(sampling_strategy=1/3, random_state=42).fit_resample(features, labels)
 
 
 class CustomMetaDataset(Dataset):
