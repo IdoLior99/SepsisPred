@@ -6,6 +6,72 @@ from torch.utils.data import random_split
 import tqdm
 import numpy as np
 import pickle
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import SimpleImputer, IterativeImputer
+
+
+def impute(meta_df: pd.DataFrame):
+    # Split df by col categories
+    lab_cols = ['BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'SaO2', 'AST', 'BUN', 'Alkalinephos',
+                'Calcium', 'Chloride', 'Creatinine', 'Bilirubin_direct', 'Glucose', 'Lactate',
+                'Magnesium', 'Phosphate', 'Potassium', 'Bilirubin_total', 'TroponinI', 'Hct',
+                'Hgb', 'PTT', 'WBC', 'Fibrinogen', 'Platelets']
+    vit_cols = ['HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2']
+    dem_cols = ['Age', 'Gender', 'Unit1', 'Unit2', 'HospAdmTime', 'ICULOS']
+
+    vit_df = meta_df[vit_cols]
+    lab_df = meta_df[lab_cols]
+    dem_df = meta_df[dem_cols]
+
+    # Vital sign imputations
+    vit_imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+    vit_imp_df = pd.DataFrame(vit_imp.fit_transform(vit_df.to_numpy()), columns=vit_cols)
+
+    # Demographics imputation
+    dem_imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
+    dem_imp_df = pd.DataFrame(dem_imp.fit_transform(dem_df.to_numpy()), columns=dem_cols)
+
+    # Laboratory values imputation
+    lab_imp = IterativeImputer(max_iter=10, random_state=0)
+    lab_imp_df = pd.DataFrame(np.round(lab_imp.fit_transform(lab_df.to_numpy())), columns=lab_cols)
+
+    meta_df = pd.concat([meta_df["Patient"], vit_imp_df, lab_imp_df, dem_imp_df, meta_df["SepsisLabel"]], axis=1)
+    return meta_df
+
+
+def get_ds_adv(ds_path, cols, topickle=True):
+    """
+    Reads the meta-dataset, severs any positive rows besides the first positive one and assigns label appropriately.
+    """
+    data = []
+    csv_files = glob.glob(ds_path + "/*.psv")
+    first = True
+    if topickle:
+        for i, file in tqdm.tqdm(enumerate(csv_files), desc='Creating mega ds'):
+            if first:
+                mega_table = pd.read_csv(file, sep='|')
+                mega_table['Patient'] = [i]*len(mega_table.index)
+                first = False
+            else:
+                table = pd.read_csv(file, sep='|')
+                table['Patient'] = [i] * len(table.index)
+                mega_table = mega_table.append(table, ignore_index=True)
+
+        pickle.dump(mega_table, open('mega_table.p','wb'))
+    else:
+        print("Loading previously configured mega-table")
+        pickle.load(open('mega_table.p', 'rb'))
+    mega_table = impute(mega_table)  # imputation
+    mega_table = mega_table[['Patient']+cols]  # feature selection
+    for idx, table in mega_table.groupby(['Patient']):
+        sepsis = table['SepsisLabel'].array
+        itemindex = np.where(sepsis == 1)[0]
+        if len(itemindex) >= 1:
+            table.drop(itemindex[1:], inplace=True)
+        label = table['SepsisLabel'].sum()
+        features = table.drop(['Patient','SepsisLabel'], axis=1)
+        data.append([features, label])
+    return data
 
 
 def get_ds(ds_path):
@@ -25,16 +91,16 @@ def get_ds(ds_path):
     return data
 
 
-def clean_table(df: pd.DataFrame):
+def clean_table(df: pd.DataFrame, tensorize=True):
     """
     A basic preprocessing scheme
     """
     cpy = df.copy()#.fillna(0)
     mea = cpy.mean(axis=0, skipna=True)
     mea = mea.fillna(0)
-    #flat = torch.tensor(mea).float()
+    if tensorize:
+        mea = torch.tensor(mea).float()
     return mea
-# Custom DataLoader Class
 
 
 # def under_sampler(squashed):
@@ -45,8 +111,13 @@ def clean_table(df: pd.DataFrame):
 
 class CustomMetaDataset(Dataset):
     def __init__(self, ds_paths, transform=None):
-        self.features = pickle.load(open(ds_paths[0], 'rb'))
-        self.labels = pickle.load(open(ds_paths[1], 'rb'))
+        if len(ds_paths) > 1:
+            self.features = pickle.load(open(ds_paths[0], 'rb'))
+            self.labels = pickle.load(open(ds_paths[1], 'rb'))
+        else:
+            base = pickle.load(open(ds_paths[0], 'rb'))
+            self.features = [samp[0] for samp in base]
+            self.labels = [samp[1] for samp in base]
         self.transform = transform
 
     def __len__(self):

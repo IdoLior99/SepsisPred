@@ -4,6 +4,21 @@ from torch import nn
 from sklearn.metrics import f1_score
 import pickle
 from models import MLP
+import pandas as pd
+from sklearn.metrics import f1_score, roc_auc_score, roc_curve
+
+
+def eval_csv(path_to_csv, type='f1'):
+    pred_df = pd.read_csv(path_to_csv)
+    true_labels = [int(name.split('_')[-1].split('.')[0]) for name in pred_df.iloc[:, 0]]
+    preds = pred_df.iloc[:, 1].tolist()
+    if type == 'f1':
+        return f1_score(true_labels, preds)
+    else:
+        fpr, tpr, _ = roc_curve(true_labels, preds)
+        roc_df = pd.DataFrame.from_dict(dict(fpr=fpr, tpr=tpr))
+        auc = roc_auc_score(true_labels, preds)
+        return roc_df, auc
 
 
 def train_and_eval(clf, train_dataloader, train_dataset, test_dataloader, test_dataset, num_epochs, batch_size,
@@ -77,7 +92,7 @@ def train_and_eval(clf, train_dataloader, train_dataset, test_dataloader, test_d
             # Testing Model Performance:
 
             print("Testing post-epoch model on test set:")
-            epoch_test_f1, epoch_test_loss, epoch_test_acc = eval_cnn(clf, test_dataloader, criterion)
+            epoch_test_f1, epoch_test_loss, epoch_test_acc = eval_clf(clf, test_dataloader, criterion)
             test_f1s.append(epoch_test_f1)
             test_losses.append(epoch_test_loss)
             test_accs.append(epoch_test_acc)
@@ -103,7 +118,7 @@ def train_and_eval(clf, train_dataloader, train_dataset, test_dataloader, test_d
     print("...Training Done...")
 
 
-def eval_cnn(clf, test_dataloader, criterion):
+def eval_clf(clf, test_dataloader, criterion):
     """
     Test a cnn on the test dataset
     """
@@ -113,7 +128,7 @@ def eval_cnn(clf, test_dataloader, criterion):
     for test_images, t_labels in test_dataloader:
         with torch.no_grad():
             if torch.cuda.is_available():
-                print("cuda??")
+                #print("cuda??")
                 test_images = test_images.cuda()
                 t_labels = t_labels.cuda()
             test_outputs = clf(test_images)
